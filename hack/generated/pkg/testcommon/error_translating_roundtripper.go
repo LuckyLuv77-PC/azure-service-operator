@@ -15,6 +15,8 @@ import (
 	"github.com/dnaeon/go-vcr/cassette"
 	"github.com/dnaeon/go-vcr/recorder"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/Azure/azure-service-operator/hack/generated/pkg/reconcilers"
 )
 
 // translateErrors wraps the given Recorder to handle any "Requested interaction not found"
@@ -78,12 +80,13 @@ func (w errorTranslation) RoundTrip(req *http.Request) (*http.Response, error) {
 	matchingBodies := w.findMatchingBodies(req)
 
 	if len(matchingBodies) == 0 {
-		panic(fmt.Sprintf(
-			"\n*** Cannot find go-vcr recording for request from test %q (no responses recorded for this method/URL): %s %s (attempt: %s)\n\n",
-			w.cassetteName,
-			req.Method,
-			req.URL.String(),
-			req.Header.Get(COUNT_HEADER)))
+		return nil, reconcilers.FatalReconciliationError{
+			Message: fmt.Sprintf("\ncannot find go-vcr recording for request from test %q (no responses recorded for this method/URL): %s %s (attempt: %s)\n\n",
+				w.cassetteName,
+				req.Method,
+				req.URL.String(),
+				req.Header.Get(COUNT_HEADER)),
+		}
 	}
 
 	// locate the request body with the shortest diff from the sent body
@@ -95,12 +98,13 @@ func (w errorTranslation) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	panic(fmt.Sprintf(
-		"\n*** Cannot find go-vcr recording for request from test %q (body mismatch): %s %s\nShortest body diff: %s\n\n",
-		w.cassetteName,
-		req.Method,
-		req.URL.String(),
-		shortestDiff))
+	return nil, reconcilers.FatalReconciliationError{
+		Message: fmt.Sprintf("\ncannot find go-vcr recording for request from test %q (body mismatch): %s %s\nShortest body diff: %s\n\n",
+			w.cassetteName,
+			req.Method,
+			req.URL.String(),
+			shortestDiff),
+	}
 }
 
 // finds bodies for interactions where request method, URL, and COUNT_HEADER match

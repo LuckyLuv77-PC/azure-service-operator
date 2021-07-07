@@ -73,7 +73,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	if errs := controllers.RegisterAll(mgr, armApplier, controllers.GetKnownStorageTypes(), ctrl.Log.WithName("controllers"), concurrency(1)); errs != nil {
+	opts := controllers.Options{
+		Options: controller.Options{
+			MaxConcurrentReconciles: 1,
+			Log:                     ctrl.Log.WithName("controllers"),
+		},
+	}
+
+	if errs := controllers.RegisterAll(mgr, armApplier, controllers.GetKnownStorageTypes(), opts); errs != nil {
 		setupLog.Error(err, "failed to register gvks")
 		os.Exit(1)
 	}
@@ -87,13 +94,5 @@ func main() {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
-	}
-}
-
-func concurrency(c int) controllers.Options {
-	return controllers.Options{
-		Options: controller.Options{
-			MaxConcurrentReconciles: c,
-		},
 	}
 }

@@ -17,7 +17,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	"github.com/Azure/azure-service-operator/hack/generated/controllers"
@@ -57,9 +59,9 @@ func createEnvtestContext(perTestContext PerTestContext) (*KubeBaseTestContext, 
 		Scheme:             controllers.CreateScheme(),
 		CertDir:            environment.WebhookInstallOptions.LocalServingCertDir,
 		Port:               environment.WebhookInstallOptions.LocalServingPort,
+		EventBroadcaster:   record.NewBroadcasterForTests(1 * time.Second),
 		MetricsBindAddress: "0", // disable serving metrics, or else we get conflicts listening on same port 8080
 	})
-
 	if err != nil {
 		return nil, errors.Wrapf(err, "creating controller-runtime manager")
 	}
@@ -75,7 +77,6 @@ func createEnvtestContext(perTestContext PerTestContext) (*KubeBaseTestContext, 
 		mgr,
 		perTestContext.AzureClient,
 		controllers.GetKnownStorageTypes(),
-		perTestContext.logger,
 		controllers.Options{
 			CreateDeploymentName: func(obj metav1.Object) (string, error) {
 				// create deployment name based on test name and kubernetes name
@@ -83,7 +84,11 @@ func createEnvtestContext(perTestContext PerTestContext) (*KubeBaseTestContext, 
 				return fmt.Sprintf("k8s_%s", result.String()), nil
 			},
 			RequeueDelay: requeueDelay,
+			Options: controller.Options{
+				Log: perTestContext.logger,
+			},
 		})
+
 	if err != nil {
 		return nil, errors.Wrapf(err, "registering reconcilers")
 	}
@@ -104,7 +109,6 @@ func createEnvtestContext(perTestContext PerTestContext) (*KubeBaseTestContext, 
 	}()
 
 	perTestContext.T.Cleanup(func() {
-
 		perTestContext.T.Log("Stopping controller-runtime manager")
 		close(stopManager)
 	})

@@ -90,7 +90,7 @@ func registerWebhook(mgr ctrl.Manager, obj runtime.Object) error {
 		Complete()
 }
 
-func RegisterAll(mgr ctrl.Manager, applier armclient.Applier, objs []runtime.Object, log logr.Logger, options Options) error {
+func RegisterAll(mgr ctrl.Manager, applier armclient.Applier, objs []runtime.Object, options Options) error {
 	options.setDefaults()
 
 	reconciledResourceLookup, err := MakeResourceGVKLookup(mgr, objs)
@@ -100,7 +100,7 @@ func RegisterAll(mgr ctrl.Manager, applier armclient.Applier, objs []runtime.Obj
 
 	var errs []error
 	for _, obj := range objs {
-		if err := register(mgr, reconciledResourceLookup, applier, obj, log, options); err != nil {
+		if err := register(mgr, reconciledResourceLookup, applier, obj, options); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -108,7 +108,7 @@ func RegisterAll(mgr ctrl.Manager, applier armclient.Applier, objs []runtime.Obj
 	return kerrors.NewAggregate(errs)
 }
 
-func register(mgr ctrl.Manager, reconciledResourceLookup map[schema.GroupKind]schema.GroupVersionKind, applier armclient.Applier, obj runtime.Object, log logr.Logger, options Options) error {
+func register(mgr ctrl.Manager, reconciledResourceLookup map[schema.GroupKind]schema.GroupVersionKind, applier armclient.Applier, obj runtime.Object, options Options) error {
 	v, err := conversion.EnforcePtr(obj)
 	if err != nil {
 		return errors.Wrap(err, "obj was expected to be ptr but was not")
@@ -122,7 +122,8 @@ func register(mgr ctrl.Manager, reconciledResourceLookup map[schema.GroupKind]sc
 	if err != nil {
 		return errors.Wrapf(err, "creating GVK for obj %T", obj)
 	}
-	log.V(4).Info("Registering", "GVK", gvk)
+
+	options.Log.V(4).Info("Registering", "GVK", gvk)
 
 	// TODO: Do we need to add any index fields here? DavidJ's controller index's status.id - see its usage
 	// TODO: of IndexField
@@ -134,7 +135,7 @@ func register(mgr ctrl.Manager, reconciledResourceLookup map[schema.GroupKind]sc
 		KubeClient:           kubeClient,
 		ResourceResolver:     genruntime.NewResolver(kubeClient, reconciledResourceLookup),
 		Name:                 t.Name(),
-		Log:                  log.WithName(controllerName),
+		Log:                  options.Log.WithName(controllerName),
 		Recorder:             mgr.GetEventRecorderFor(controllerName),
 		GVK:                  gvk,
 		RequeueDelay:         options.RequeueDelay,
@@ -145,7 +146,6 @@ func register(mgr ctrl.Manager, reconciledResourceLookup map[schema.GroupKind]sc
 		For(obj).
 		WithOptions(options.Options).
 		Build(reconciler)
-
 	if err != nil {
 		return errors.Wrap(err, "unable to build controllers / reconciler")
 	}

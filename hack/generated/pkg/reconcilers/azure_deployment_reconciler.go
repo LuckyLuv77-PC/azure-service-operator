@@ -109,18 +109,34 @@ func NewAzureDeploymentReconciler(
 	}
 }
 
+func (r *AzureDeploymentReconciler) checkForFatalReconciliationError(err error) {
+	var fatal FatalReconciliationError
+	if errors.As(err, &fatal) {
+		r.SetResourceProvisioningState(armclient.FailedProvisioningState)
+		r.SetResourceError(fatal.Message)
+	}
+}
+
 func (r *AzureDeploymentReconciler) CreateOrUpdate(ctx context.Context) (ctrl.Result, error) {
 	action, actionFunc, err := r.DetermineCreateOrUpdateAction()
 	if err != nil {
 		r.log.Error(err, "error determining create or update action")
 		r.recorder.Event(r.obj, v1.EventTypeWarning, "DetermineCreateOrUpdateActionError", err.Error())
+
+		r.checkForFatalReconciliationError(err)
+
 		return ctrl.Result{}, err
 	}
+
+	r.log.Info("Reconciling Azure resource %s, will perform: %s", r.obj.AzureName(), action)
 
 	result, err := actionFunc(ctx)
 	if err != nil {
 		r.log.Error(err, "Error during CreateOrUpdate", "action", action)
 		r.recorder.Event(r.obj, v1.EventTypeWarning, "CreateOrUpdateActionError", err.Error())
+
+		r.checkForFatalReconciliationError(err)
+
 		return ctrl.Result{}, err
 	}
 
@@ -132,6 +148,9 @@ func (r *AzureDeploymentReconciler) Delete(ctx context.Context) (ctrl.Result, er
 	if err != nil {
 		r.log.Error(err, "error determining delete action")
 		r.recorder.Event(r.obj, v1.EventTypeWarning, "DetermineDeleteActionError", err.Error())
+
+		r.checkForFatalReconciliationError(err)
+
 		return ctrl.Result{}, err
 	}
 
@@ -139,6 +158,9 @@ func (r *AzureDeploymentReconciler) Delete(ctx context.Context) (ctrl.Result, er
 	if err != nil {
 		r.log.Error(err, "Error during Delete", "action", action)
 		r.recorder.Event(r.obj, v1.EventTypeWarning, "DeleteActionError", err.Error())
+
+		r.checkForFatalReconciliationError(err)
+
 		return ctrl.Result{}, err
 	}
 
@@ -484,9 +506,9 @@ func (r *AzureDeploymentReconciler) CreateDeployment(ctx context.Context) (ctrl.
 				err = r.Patch(ctx, func() error {
 					r.SetResourceError(err.Error())
 					r.SetResourceProvisioningState(armclient.FailedProvisioningState)
-					sig, err := r.SpecSignature() // nolint:govet
-					if err != nil {
-						return errors.Wrap(err, "failed to compute resource spec hash")
+					sig, sigErr := r.SpecSignature()
+					if sigErr != nil {
+						return errors.Wrap(sigErr, "failed to compute resource spec hash")
 					}
 					r.SetResourceSignature(sig)
 
