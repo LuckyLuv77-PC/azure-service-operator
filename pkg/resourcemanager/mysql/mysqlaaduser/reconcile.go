@@ -108,6 +108,7 @@ func (m *MySQLAADUserManager) Ensure(ctx context.Context, obj runtime.Object, op
 
 		return false, mysql.IgnoreDatabaseBusy(err)
 	}
+	defer db.Close()
 
 	instance.Status.SetProvisioning("")
 
@@ -179,6 +180,7 @@ func (m *MySQLAADUserManager) Delete(ctx context.Context, obj runtime.Object, op
 		}
 		return false, err
 	}
+	defer db.Close()
 
 	err = mysql.DropUser(ctx, db, instance.Username())
 	if err != nil {
@@ -193,12 +195,8 @@ func (m *MySQLAADUserManager) Delete(ctx context.Context, obj runtime.Object, op
 
 // GetServer retrieves a server
 func (m *MySQLAADUserManager) GetServer(ctx context.Context, resourceGroupName, serverName string) (mysqlmgmt.Server, error) {
-	// We don't need to pass the secret client and scheme because
-	// they're not used getting the server.
-	// TODO: This feels a bit dodgy, consider taking secret client and
-	// scheme just so we can pass them in here.
-	client := mysqlserver.NewMySQLServerClient(m.Creds, nil, nil)
-	return client.GetServer(ctx, resourceGroupName, serverName)
+	client := mysqlserver.MakeMySQLServerAzureClient(m.Creds)
+	return client.Get(ctx, resourceGroupName, serverName)
 }
 
 // GetParents gets the parents of the user
