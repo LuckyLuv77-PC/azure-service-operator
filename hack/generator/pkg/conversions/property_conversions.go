@@ -117,7 +117,6 @@ func init() {
 //     destination := ""
 // }
 //
-// TODO: Make this internal
 func CreateTypeConversion(
 	sourceEndpoint *TypedConversionEndpoint,
 	destinationEndpoint *TypedConversionEndpoint,
@@ -547,7 +546,10 @@ func assignArrayFromArray(
 	}
 
 	return func(reader dst.Expr, writer func(dst.Expr) []dst.Stmt, generationContext *astmodel.CodeGenerationContext) []dst.Stmt {
-		// We create three obviously related identifiers to use for the conversion
+		// We create three obviously related identifiers to use for the array conversion
+		// These suffixes must not overlap with those used for map conversion.
+		// (If these suffixes overlap, the naming becomes difficult to read when converting maps containing slices or
+		// vice versa.)
 		itemId := sourceEndpoint.CreateLocal("Item")
 		indexId := sourceEndpoint.CreateLocal("Index")
 		tempId := sourceEndpoint.CreateLocal("List")
@@ -629,7 +631,10 @@ func assignMapFromMap(
 	}
 
 	return func(reader dst.Expr, writer func(dst.Expr) []dst.Stmt, generationContext *astmodel.CodeGenerationContext) []dst.Stmt {
-		// We create three obviously related identifiers to use for the conversion
+		// We create three obviously related identifiers to use for the conversion.
+		// These suffixes must not overlap with those used for array conversion.
+		// (If these suffixes overlap, the naming becomes difficult to read when converting maps containing slices or
+		// vice versa.)
 		itemId := sourceEndpoint.CreateLocal("Value")
 		keyId := sourceEndpoint.CreateLocal("Key")
 		tempId := sourceEndpoint.CreateLocal("Map")
