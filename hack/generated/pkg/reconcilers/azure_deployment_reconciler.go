@@ -540,7 +540,38 @@ func (r *AzureDeploymentReconciler) CreateDeployment(ctx context.Context) (ctrl.
 	return result, err
 }
 
-func (r *AzureDeploymentReconciler) handleDeploymentFinished(ctx context.Context, deployment *armclient.Deployment) (ctrl.Result, error) {
+// TODO: There's a bit too much duplicated code between this and create deployment -- should be a good way to combine them?
+func (r *AzureDeploymentReconciler) MonitorDeployment(ctx context.Context) (ctrl.Result, error) {
+	deploymentID, deploymentIDOk := r.GetDeploymentID()
+	if !deploymentIDOk {
+		return ctrl.Result{}, errors.New("cannot MonitorDeployment with empty deploymentID")
+	}
+
+	deployment, retryAfter, err := r.ARMClient.GetDeployment(ctx, deploymentID)
+	if err != nil {
+		// If the deployment doesn't exist, clear our ID/Name and return so we can try again
+		var reqErr *autorestAzure.RequestError
+		if errors.As(err, &reqErr) && reqErr.StatusCode == http.StatusNotFound {
+			r.SetDeploymentID("")
+			r.SetDeploymentName("")
+			err = r.CommitUpdate(ctx)
+			if err != nil {
+				// This is a superfluous error as per https://github.com/kubernetes-sigs/controller-runtime/issues/377
+				// The correct handling is just to ignore it and we will get an event shortly with the updated version to patch
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+
+			// We just modified spec so don't need to requeue this
+			return ctrl.Result{}, nil
+		}
+
+		if retryAfter != 0 {
+			r.log.V(3).Info("Error performing GET on deployment, will retry", "delaySec", retryAfter/time.Second)
+			return ctrl.Result{RequeueAfter: retryAfter}, nil
+		}
+
+		return ctrl.Result{}, errors.Wrapf(err, "getting deployment %q from ARM", deploymentID)
+	}
 	var status genruntime.FromARMConverter
 	if deployment.IsSuccessful() {
 		// TODO: There's some overlap here with what Update does
@@ -559,14 +590,15 @@ func (r *AzureDeploymentReconciler) handleDeploymentFinished(ctx context.Context
 		}
 	}
 
-	err := r.Update(deployment, status)
+	err = r.Update(deployment, status)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "updating obj")
 	}
 
-	err = r.CommitUpdate(ctx)
+		return nil
+
 	if err != nil {
-		// NotFound is a superfluous error as per https://github.com/kubernetes-sigs/controller-runtime/issues/377
+		// This is a superfluous error as per https://github.com/kubernetes-sigs/controller-runtime/issues/377
 		// The correct handling is just to ignore it and we will get an event shortly with the updated version to patch
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -645,7 +677,31 @@ func (r *AzureDeploymentReconciler) MonitorDeployment(ctx context.Context) (ctrl
 	deployment.ID = ""
 	deployment.Name = ""
 
-	return r.handleDeploymentFinished(ctx, deployment)
+		err = r.Update(deployment, status)
+		if err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "updating obj")
+		}
+			"DeploymentID", r.GetDeploymentIDOrDefault(),
+		err = r.CommitUpdate(ctx)
+		if err != nil {
+			// This is a superfluous error as per https://github.com/kubernetes-sigs/controller-runtime/issues/377
+			// The correct handling is just to ignore it and we will get an event shortly with the updated version to patch
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+
+		r.log.V(4).Info(
+			"Cleared deployment info from resource",
+			"DeploymentID", r.GetDeploymentIDOrDefault(),
+			"DeploymentName", r.GetDeploymentNameOrDefault())
+	}
+
+	if deployment.IsTerminalProvisioningState() {
+		// we are done
+		return ctrl.Result{}, nil
+	}
+
+	r.log.V(3).Info("Deployment still running")
+	return ctrl.Result{Requeue: true, RequeueAfter: retryAfter}, err
 }
 
 func (r *AzureDeploymentReconciler) ManageOwnership(ctx context.Context) (ctrl.Result, error) {
