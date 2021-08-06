@@ -605,6 +605,7 @@ func (r *AzureDeploymentReconciler) MonitorDeployment(ctx context.Context) (ctrl
 
 		return ctrl.Result{}, errors.Wrapf(err, "getting deployment %q from ARM", deploymentID)
 	}
+
 	r.log.V(4).Info(
 		"Monitoring deployment",
 		"action", string(CreateOrUpdateActionMonitorDeployment),
