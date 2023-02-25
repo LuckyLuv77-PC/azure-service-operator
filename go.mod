@@ -28,8 +28,8 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/sethvargo/go-password v0.1.2
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
-	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	golang.org/x/net v0.7.0
 	k8s.io/api v0.21.2
 	k8s.io/apimachinery v0.21.2
 	k8s.io/client-go v0.21.2
