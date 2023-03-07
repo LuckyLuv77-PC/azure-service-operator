@@ -13,12 +13,9 @@ require (
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-cmp v0.5.5
 	github.com/google/uuid v1.1.2
-	github.com/kr/pretty v0.2.0
-	github.com/kylelemons/godebug v1.1.0
-	github.com/leanovate/gopter v0.2.8
 	github.com/onsi/gomega v1.14.0
 	github.com/pkg/errors v0.9.1
-	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
+	golang.org/x/crypto v0.1.0
 	k8s.io/api v0.21.2
 	k8s.io/apiextensions-apiserver v0.21.2
 	k8s.io/apimachinery v0.21.2
